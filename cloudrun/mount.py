@@ -2,7 +2,7 @@ from . import config
 import os, json, fcntl, pipes, subprocess, traceback
 
 STATUS_PATH = config.CONFIG_PATH + '/mounts'
-FAKE_MOUNTS = True
+FAKE_MOUNTS = False
 
 def read_info():
     if not os.path.exists(STATUS_PATH):
