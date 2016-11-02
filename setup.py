@@ -9,7 +9,7 @@ setup(
     author='Michał Zieliński',
     author_email='michal@zielinscy.org.pl',
     url='https://cloudrun.io',
-    packages=['cloudrun', 'typing'],
+    packages=['cloudrun'],
     scripts=['scripts/cloudrun'],
-    install_requires=['requests'],
+    install_requires=['requests', 'typing'],
 )
