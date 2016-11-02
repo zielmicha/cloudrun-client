@@ -51,11 +51,14 @@ class Runner:
         known_hosts_file = cache_path + '/ssh/known_hosts_' + id
         misc.write_file(known_hosts_file, known_hosts_data)
 
-        self.ssh_args = [
+        self.base_ssh_args = [
             '-oIdentityFile=' + SSH_KEY_PATH,
             '-oUserKnownHostsFile=' + known_hosts_file,
             '-oStrictHostKeyChecking=yes',
             '-oProxyCommand={} --socks-connect {}:443 {}:22'.format(os.path.realpath(sys.argv[0]), external_ip, internal_ip),
+        ] # for SSHFS
+
+        self.ssh_args = self.base_ssh_args + [ # for interactive usage
             '-oControlPersist=600',
             '-oControlMaster=auto',
             '-oControlPath=%s' % control_path,

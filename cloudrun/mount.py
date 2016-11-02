@@ -63,14 +63,14 @@ def unmount(mountpoint: str) -> None:
 def mount(runner, remote_path: str, mountpoint: str) -> None:
     mountpoint = os.path.realpath(mountpoint)
     unmount(mountpoint)
-    command = ' '.join(map(pipes.quote, ['ssh'] + runner.ssh_args))
+    sshfs_cmd = (['sshfs', '-f', '-C', '-o', 'reconnect,delay_connect'] +
+                 runner.base_ssh_args + ['user@host:' + remote_path, mountpoint])
 
     if FAKE_MOUNTS:
         process = subprocess.Popen(['sleep', '100h'])
-        print('mount', repr(command), remote_path, mountpoint)
+        print('mount', ' '.join(map(pipes.quote, sshfs_cmd)))
     else:
-        process = subprocess.Popen(['sshfs', '-f', '-C', '-o', 'reconnect,delay_connect',
-                                    '-ossh_command=' + command, 'user@host:' + remote_path, mountpoint])
+        process = subprocess.Popen(sshfs_cmd)
 
     with open(STATUS_PATH, 'a+') as f:
         fcntl.flock(f, fcntl.LOCK_EX)
