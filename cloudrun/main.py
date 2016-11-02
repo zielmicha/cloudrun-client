@@ -57,7 +57,13 @@ def cmd_create_runner():
 
 def cmd_mount():
     ' Mount a remote directory on your computer '
-    pass
+    parser = argparse.ArgumentParser()
+    parser.add_argument('remotedir')
+    parser.add_argument('localdir')
+    ns = parser.parse_args()
+
+    runner = get_runner()
+    mount.fork_mount(runner, ns.remotedir, ns.localdir)
 
 def cmd_run():
     ' Execute a command on a remote runner '
@@ -66,11 +72,11 @@ def cmd_run():
     ns = parser.parse_args()
 
     runner = get_runner()
-    command_str = ' '.join(map(pipes.quote, ns.command))
+    command_str = ' '.join(map(pipes.quote, ns.command or ['bash']))
     if runner.default_path is not None:
         command_str = 'cd %s; %s' % (pipes.quote(runner.default_path), command_str)
 
-    os.execvp('ssh', ['ssh'] + runner.ssh_args + [runner.ssh_target, '--', command_str])
+    os.execvp('ssh', ['ssh', '-t'] + runner.ssh_args + [runner.ssh_target, '--', command_str])
 
 def upload_or_download(src, dst):
     runner = get_runner()
