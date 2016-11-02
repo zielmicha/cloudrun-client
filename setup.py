@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name='cloudrun',
-    version='0.1.1',
+    version='0.1.2',
     description='Client utility for cloudrun.io',
     author='Michał Zieliński',
     author_email='michal@zielinscy.org.pl',
