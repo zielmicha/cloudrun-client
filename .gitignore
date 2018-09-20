@@ -3,3 +3,6 @@ __pycache__/
 /dist/
 /build/
 /test/
+.mypy_cache/
+/cloudrun/cloudrun-fs-server
+*.egg-info/

@@ -9,7 +9,8 @@ class HostNameIgnoringAdapter(requests.adapters.HTTPAdapter):
                                        assert_hostname=False)
 
 def upgrade_request(host, cert, path, headers, body=None):
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+    context.verify_mode = ssl.CERT_REQUIRED
     context.load_verify_locations(cert)
     context.check_hostname = False
 
