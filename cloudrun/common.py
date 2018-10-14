@@ -34,9 +34,6 @@ def pipe(sock1, sock2):
         while True:
             data = sock1.recv(40960)
             if not data: break
-            #print(sock1, '->', sock2, repr(data))
             sock2.sendall(data)
     except IOError as err:
         print(err)
-
-    print('reading from', sock1, 'finished')

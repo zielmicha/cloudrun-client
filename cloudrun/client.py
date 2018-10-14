@@ -1,4 +1,4 @@
-import argparse, tempfile, requests, subprocess, atexit, shutil, threading, socket, os, sys, json, urllib.parse, atexit, signal
+import argparse, tempfile, requests, subprocess, atexit, shutil, threading, socket, os, sys, json, urllib.parse, atexit, signal, getpass, socket
 from . import common, simplepty
 
 DEFAULT_SCAN_DIRS = ['/usr', '/bin', '/lib', '/lib64', '/etc', '/var']
@@ -8,18 +8,60 @@ def manual_login(ns):
     if not os.path.exists(CONFIG_PATH):
         os.makedirs(CONFIG_PATH)
     shutil.copy(ns.cert, CONFIG_PATH + '/cert.pem')
-    with open(CONFIG_PATH + '/machine.json', 'w') as f:
+    with open(CONFIG_PATH + '/api.json', 'w') as f:
         f.write(json.dumps({
             'host': ns.host,
             'key': ns.key,
             'manual': True,
         }))
 
+def login(api_url):
+    if not os.path.exists(CONFIG_PATH):
+        os.makedirs(CONFIG_PATH)
+
+    r = requests.post(api_url + '/api/fetch-token',
+                      data={'hostname': socket.gethostname()})
+    r.raise_for_status()
+    url = r.json()['url']
+    token = r.json()['token']
+
+    print('Please visit ' + url + ' and accept linking this computer to your account.')
+
+    with open(CONFIG_PATH + '/api.json', 'w') as f:
+        f.write(json.dumps({
+            'api_url': api_url,
+            'api_token': token,
+        }))
+
 def get_settings():
-    return json.load(open(CONFIG_PATH + '/machine.json'))
+    return json.load(open(CONFIG_PATH + '/api.json'))
+
+def request_runner_info(settings):
+    r = requests.get(settings['api_url'] + '/api/runner-info?refresh=true',
+                     headers={'authorization': 'token ' + settings['api_token']})
+    r.raise_for_status()
+
+    running = r.json()['running']
+    if not running:
+        print('Starting your cloud runner... It may take ~60 seconds.')
+        r = requests.get(settings['api_url'] + '/api/runner-start',
+                     headers={'authorization': 'token ' + settings['api_token']})
+        r.raise_for_status()
+        return request_runner_info(settings)
+    else:
+        return r.json()
 
 def make_session():
     settings = get_settings()
+
+    if not settings.get('manual'):
+        if not settings.get('api_url'):
+            sys.exit('You are not logged in. Please run `cloudrun login`.')
+
+        info = request_runner_info(settings)
+        with open(CONFIG_PATH + '/cert.pem', 'w') as f: # TODO:
+            f.write(info['cert'])
+        settings.update(info)
 
     s = requests.Session()
     s.headers['authorization'] = 'key ' + settings['key']
@@ -93,7 +135,8 @@ def get_daemon_pid():
 
 def restart():
     pid = get_daemon_pid()
-    os.kill(pid, signal.SIGKILL)
+    if pid:
+        os.kill(pid, signal.SIGKILL)
 
     err = subprocess.call([sys.executable, '-m', 'cloudrun.client', 'daemon'])
     if err != 0:
@@ -113,17 +156,24 @@ def execute(command):
     check_daemon()
 
     settings, session = make_session()
+    isatty = os.isatty(0)
 
     info = {
         'command': command, 'environ': dict(os.environ),
-        'uid': os.getuid(), 'gid': os.getgid(), 'groups': os.getgroups()
+        'uid': os.getuid(), 'gid': os.getgid(), 'groups': os.getgroups(),
+        'tty': isatty,
     }
 
     sock1 = common.upgrade_request(host=settings['host'], cert=settings['cert'],
                                    path='/exec',
                                    headers={'authorization': 'key ' + settings['key']},
                                    body=info)
-    simplepty.run_client(sock1.makefile('rwb'))
+    if isatty:
+        simplepty.run_client(sock1.makefile('rwb'))
+    else:
+        f = sock1.makefile('rwb')
+        threading.Thread(target=lambda: common.pipe(f, sys.stdout)).start()
+        common.pipe(sys.stdin, f)
 
 def main():
     main_parser = argparse.ArgumentParser()
@@ -142,9 +192,14 @@ def main():
 
     parser = subparsers.add_parser('restart', help='Restart daemon to make sure system changes (e.g. installed packages) propagate to the cloud')
 
+    parser = subparsers.add_parser('login', help='Login to cloudrun.io')
+    parser.add_argument('--api-url', default='https://cloudrun.io')
+
     ns = main_parser.parse_args()
     if ns.subcommand == 'manual-login':
         manual_login(ns)
+    elif ns.subcommand == 'login':
+        login(ns.api_url)
     elif ns.subcommand == 'exec':
         execute(ns.command)
     elif ns.subcommand == 'daemon':
@@ -152,7 +207,7 @@ def main():
     elif ns.subcommand == 'restart':
         restart()
     else:
-        parser.print_usage()
+        main_parser.print_usage()
         sys.exit('invalid subcommand')
 
 if __name__ == '__main__':
