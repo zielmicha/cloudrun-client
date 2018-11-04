@@ -33,8 +33,18 @@ def login(api_url):
             'api_token': token,
         }))
 
+def stop_runner():
+    settings = get_settings()
+
+    r = requests.post(settings['api_url'] + '/api/runner-stop',
+                      headers={'authorization': 'token ' + settings['api_token']})
+    r.raise_for_status()
+
 def get_settings():
-    return json.load(open(CONFIG_PATH + '/api.json'))
+    path = CONFIG_PATH + '/api.json'
+    if not os.path.exists(path):
+        sys.exit('Please log in with `cloudrun login`.')
+    return json.load(open(path))
 
 def request_runner_info(settings):
     r = requests.get(settings['api_url'] + '/api/runner-info?refresh=true',
@@ -44,8 +54,8 @@ def request_runner_info(settings):
     running = r.json()['running']
     if not running:
         print('Starting your cloud runner... It may take ~60 seconds.')
-        r = requests.get(settings['api_url'] + '/api/runner-start',
-                     headers={'authorization': 'token ' + settings['api_token']})
+        r = requests.post(settings['api_url'] + '/api/runner-start',
+                          headers={'authorization': 'token ' + settings['api_token']})
         r.raise_for_status()
         return request_runner_info(settings)
     else:
@@ -100,6 +110,7 @@ def daemon(foreground=False):
     print('scanning...')
     server_path = os.path.dirname(__file__) + '/cloudrun-fs-server'
     subprocess.check_call([server_path, 'scan', temp_dir + '/meta'] + DEFAULT_SCAN_DIRS)
+    print('uploading to', 'https://%s/update-meta' % (settings['host']))
     resp = session.post('https://%s/update-meta' % (settings['host']),
                         data=open(temp_dir + '/meta', 'rb'), verify=settings['cert'])
     resp.raise_for_status()
@@ -187,6 +198,8 @@ def main():
     parser = subparsers.add_parser('exec', help='Execute command')
     parser.add_argument('command', nargs='+')
 
+    parser = subparsers.add_parser('stop-runner', help='Stop the runner')
+
     parser = subparsers.add_parser('daemon', help='Daemon')
     parser.add_argument('--foreground', action='store_true')
 
@@ -206,6 +219,8 @@ def main():
         daemon(foreground=ns.foreground)
     elif ns.subcommand == 'restart':
         restart()
+    elif ns.subcommand == 'stop-runner':
+        stop_runner()
     else:
         main_parser.print_usage()
         sys.exit('invalid subcommand')
