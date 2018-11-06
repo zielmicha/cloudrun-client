@@ -1,4 +1,4 @@
-import argparse, tempfile, requests, subprocess, atexit, shutil, threading, socket, os, sys, json, urllib.parse, atexit, signal, getpass, socket
+import argparse, tempfile, requests, subprocess, atexit, shutil, threading, socket, os, sys, json, urllib.parse, atexit, signal, getpass, socket, time
 from . import common, simplepty
 
 DEFAULT_SCAN_DIRS = ['/usr', '/bin', '/lib', '/lib64', '/etc', '/var']
@@ -46,6 +46,49 @@ def get_settings():
         sys.exit('Please log in with `cloudrun login`.')
     return json.load(open(path))
 
+class Spinner:
+    def __init__(self, text, eta):
+        self.i = 0
+        self.text = text
+        self.eta = eta
+
+    def next(self):
+        n = 5
+        self.i += 1
+        self.i %= 2*(n-1)
+        b = [' ']*n
+        pos = self.i if self.i < n else 2*n-self.i-2
+        b[pos] = '='
+        msg = '\r[' + ''.join(b) + '] ' + self.text
+        if self.eta:
+            left = self.eta - time.time()
+            if left > 0:
+                msg += ' (%0 2d s)' % (left)
+            else:
+                msg += '        '
+        sys.stderr.write(msg)
+        sys.stderr.flush()
+
+    def finish(self):
+        sys.stderr.write('\b[  OK  ] ' + self.text + '\n')
+        sys.stderr.flush()
+
+def start_runner(settings):
+    spinner = Spinner('Starting your cloud runner...', eta=time.time() + 180)
+
+    while True:
+        r = requests.post(settings['api_url'] + '/api/runner-start',
+                          headers={'authorization': 'token ' + settings['api_token']})
+        r.raise_for_status()
+        if r.json()['running']:
+            break
+        time.sleep(0.5)
+        spinner.next()
+        time.sleep(0.5)
+        spinner.next()
+
+    spinner.finish()
+
 def request_runner_info(settings):
     r = requests.get(settings['api_url'] + '/api/runner-info?refresh=true',
                      headers={'authorization': 'token ' + settings['api_token']})
@@ -53,10 +96,7 @@ def request_runner_info(settings):
 
     running = r.json()['running']
     if not running:
-        print('Starting your cloud runner... It may take ~60 seconds.')
-        r = requests.post(settings['api_url'] + '/api/runner-start',
-                          headers={'authorization': 'token ' + settings['api_token']})
-        r.raise_for_status()
+        start_runner(settings)
         return request_runner_info(settings)
     else:
         return r.json()
@@ -103,6 +143,11 @@ def daemonize():
     atexit.register(os.unlink, CONFIG_PATH + '/daemon.pid')
 
 def daemon(foreground=False):
+    pid = get_daemon_pid()
+    if pid:
+        print('daemon already running')
+        return
+
     settings, session = make_session()
 
     temp_dir = tempfile.mkdtemp()
@@ -141,8 +186,8 @@ def get_daemon_pid():
     try:
         os.kill(pid, 0)
         return pid
-    except OSError:
-        return pid
+    except Exception:
+        return None
 
 def restart():
     pid = get_daemon_pid()

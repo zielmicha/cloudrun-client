@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # coding=utf-8
 from distutils.core import setup
+import setuptools
 
 setup(
     name='cloudrun',
-    version='0.2.0',
+    version='0.2.1',
     description='Client utility for cloudrun.io',
     author='The Cloudrun Authors',
     author_email='contact@cloudrun.io',
