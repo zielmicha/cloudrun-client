@@ -34,6 +34,8 @@ def login(api_url):
         }))
 
 def stop_runner():
+    kill_daemon()
+
     settings = get_settings()
 
     r = requests.post(settings['api_url'] + '/api/runner-stop',
@@ -189,10 +191,13 @@ def get_daemon_pid():
     except Exception:
         return None
 
-def restart():
+def kill_daemon():
     pid = get_daemon_pid()
     if pid:
         os.kill(pid, signal.SIGKILL)
+
+def restart():
+    kill_daemon()
 
     err = subprocess.call([sys.executable, '-m', 'cloudrun.client', 'daemon'])
     if err != 0:

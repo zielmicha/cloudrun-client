@@ -5,7 +5,7 @@ import setuptools
 
 setup(
     name='cloudrun',
-    version='0.2.1',
+    version='0.2.2',
     description='Client utility for cloudrun.io',
     author='The Cloudrun Authors',
     author_email='contact@cloudrun.io',
